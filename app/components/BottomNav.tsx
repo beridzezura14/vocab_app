@@ -8,15 +8,14 @@ import {
   BookOpen,
   Layers3,
   ChartNoAxesColumn,
-  UserRound,
 } from "lucide-react";
+import ProfileButton from "./ProfileButton";
 
 const navigation = [
   { label: "Home", href: "/", icon: House },
   { label: "Words", href: "/vocabulary", icon: BookOpen },
   { label: "Learn", href: "/flashcards", icon: Layers3 },
   { label: "Stats", href: "/statistics", icon: ChartNoAxesColumn },
-  { label: "Profile", href: "/profile", icon: UserRound },
 ];
 
 export default function BottomNav() {
@@ -47,6 +46,7 @@ export default function BottomNav() {
             </Link>
           );
         })}
+        <ProfileButton inNav />
       </div>
       <div className="h-[env(safe-area-inset-bottom)]" />
     </nav>

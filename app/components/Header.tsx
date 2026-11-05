@@ -2,7 +2,8 @@
 "use client";
 
 import Link from "next/link";
-import { Languages, ChevronDown, UserRound } from "lucide-react";
+import { Languages, ChevronDown } from "lucide-react";
+import ProfileButton from "./ProfileButton";
 import { useState } from "react";
 
 export default function Header() {
@@ -43,13 +44,7 @@ export default function Header() {
             />
           </div>
 
-          <Link
-            href="/profile"
-            aria-label="Profile"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#F5F3FF] text-[#7054E8]"
-          >
-            <UserRound size={19} />
-          </Link>
+          <ProfileButton />
         </div>
       </div>
     </header>

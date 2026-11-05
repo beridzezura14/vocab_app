@@ -1,11 +1,14 @@
 
 "use client";
 
+import { useLibrary } from "../use-library";
+
 import { speakSpanish } from "../speak-spanish";
 
 import { shuffle } from "../shuffle";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import Link from "next/link";
 import {
   ArrowLeft,
   BookOpen,
@@ -19,8 +22,6 @@ import {
 } from "lucide-react";
 
 import {
-  words,
-  lessons as defaultLessons,
   type Word,
 } from "@/data/words";
 
@@ -51,67 +52,13 @@ type StudySession = {
   completed: boolean;
 };
 
-const WORDS_KEY = "lingua-custom-words";
-const LESSONS_KEY = "lingua-custom-lessons";
 
 export default function FlashcardsPage() {
-  const [customWords, setCustomWords] = useState<Word[]>([]);
-  const [customLessons, setCustomLessons] = useState<Lesson[]>([]);
+  const { customWords, customLessons, libraryError } = useLibrary();
   const [session, setSession] = useState<StudySession | null>(null);
 
-  useEffect(() => {
-    try {
-      const savedWords = localStorage.getItem(WORDS_KEY);
-      const savedLessons = localStorage.getItem(LESSONS_KEY);
-
-      if (savedWords) {
-        const parsed: unknown = JSON.parse(savedWords);
-
-        if (Array.isArray(parsed)) {
-          setCustomWords(
-            parsed
-              .filter(
-                (item): item is Word =>
-                  typeof item === "object" &&
-                  item !== null &&
-                  typeof item.id === "number" &&
-                  typeof item.spanish === "string" &&
-                  typeof item.georgian === "string"
-              )
-              .map((item) => ({
-                ...item,
-                lessonId:
-                  typeof item.lessonId === "number"
-                    ? item.lessonId
-                    : 1,
-              }))
-          );
-        }
-      }
-
-      if (savedLessons) {
-        const parsed: unknown = JSON.parse(savedLessons);
-
-        if (Array.isArray(parsed)) {
-          setCustomLessons(
-            parsed.filter(
-              (item): item is Lesson =>
-                typeof item === "object" &&
-                item !== null &&
-                typeof item.id === "number" &&
-                typeof item.title === "string" &&
-                typeof item.description === "string"
-            )
-          );
-        }
-      }
-    } catch (error) {
-      console.error("Could not load study data:", error);
-    }
-  }, []);
-
-  const allWords = [...customWords, ...words];
-  const allLessons = [...defaultLessons, ...customLessons];
+  const allWords = customWords;
+  const allLessons = customLessons;
 
   const startLesson = (lesson: Lesson) => {
     const lessonWords = allWords.filter(
@@ -216,6 +163,7 @@ export default function FlashcardsPage() {
 
   return (
     <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6">
+      {libraryError && <p role="alert" className="mb-4 text-sm text-red-700">{libraryError}</p>}
       {!session ? (
         <>
           <div className="mb-6">
@@ -228,6 +176,11 @@ export default function FlashcardsPage() {
           </div>
 
           <div className="space-y-3">
+            {!libraryError && allLessons.length === 0 && (
+              <Link href="/vocabulary" className="inline-block rounded-xl bg-[#7054E8] px-4 py-2 text-sm font-semibold text-white">
+                Add words to start learning
+              </Link>
+            )}
             {allLessons.map((lesson) => {
               const count = allWords.filter(
                 (word) => word.lessonId === lesson.id
@@ -250,7 +203,7 @@ export default function FlashcardsPage() {
                       {lesson.title}
                     </h2>
                     <p className="mt-1 text-[13px] text-[#9292A2]">
-                      {lesson.description} · {count} სიტყვა
+                      {count} {count === 1 ? "word" : "words"}
                     </p>
                   </div>
 

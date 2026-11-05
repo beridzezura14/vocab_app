@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { X, Plus, ChevronDown } from "lucide-react";
 import { createPortal } from "react-dom";
@@ -20,9 +20,8 @@ type AddWordSheetProps = {
   onAdd: (
     spanish: string,
     georgian: string,
-    lessonId: number
-  ) => void;
-  onCreateLesson: (title: string) => number;
+    lesson: number | string
+  ) => Promise<number>;
 };
 
 export default function AddWordSheet({
@@ -31,7 +30,6 @@ export default function AddWordSheet({
   lessons,
   selectedLesson,
   onAdd,
-  onCreateLesson,
 }: AddWordSheetProps) {
   const [mounted, setMounted] = useState(false);
 
@@ -41,6 +39,8 @@ export default function AddWordSheet({
   const [mode, setMode] = useState<"existing" | "new">("existing");
   const [lessonId, setLessonId] = useState<number | null>(null);
   const [newLessonTitle, setNewLessonTitle] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   const spanishRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -50,19 +50,24 @@ export default function AddWordSheet({
     setMounted(true);
   }, []);
 
+  const initialize = useEffectEvent(() => {
+    setLessonId(selectedLesson ?? lessons[0]?.id ?? null);
+    setMode(lessons.length ? "existing" : "new");
+    setNewLessonTitle("");
+    setError("");
+  });
+  const dismiss = useEffectEvent(onClose);
+
   useEffect(() => {
     if (!open) return;
-
-    setLessonId(selectedLesson ?? lessons[0]?.id ?? null);
-    setMode("existing");
-    setNewLessonTitle("");
+    initialize();
 
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
-        onClose();
+        dismiss();
         return;
       }
 
@@ -93,38 +98,37 @@ export default function AddWordSheet({
       document.body.style.overflow = previousOverflow;
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [open, selectedLesson, lessons, onClose]);
+  }, [open]);
 
   const canSave =
-    spanish.trim().length > 0 &&
+    !saving && spanish.trim().length > 0 &&
     georgian.trim().length > 0 &&
     (mode === "new"
       ? newLessonTitle.trim().length > 0
       : lessonId !== null);
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     if (!canSave) return;
 
-    let targetLessonId = lessonId;
-
-    if (mode === "new") {
-      targetLessonId = onCreateLesson(newLessonTitle.trim());
-
+    const lesson = mode === "new" ? newLessonTitle.trim() : lessonId;
+    if (lesson === null) return;
+    setSaving(true);
+    setError("");
+    try {
+      const targetLessonId = await onAdd(spanish.trim(), georgian.trim(), lesson);
       setLessonId(targetLessonId);
       setMode("existing");
       setNewLessonTitle("");
+      setSpanish("");
+      setGeorgian("");
+      spanishRef.current?.focus();
+    } catch {
+      setError("Could not save this word. Please retry.");
+    } finally {
+      setSaving(false);
     }
-
-    if (targetLessonId === null) return;
-
-    onAdd(spanish.trim(), georgian.trim(), targetLessonId);
-
-    setSpanish("");
-    setGeorgian("");
-
-    spanishRef.current?.focus();
   };
 
   if (!mounted || !open) return null;
@@ -295,11 +299,11 @@ export default function AddWordSheet({
                 className="flex h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-[#7054E8] text-sm font-semibold text-white transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Plus size={19} />
-                Save Word
+                {saving ? "Saving…" : "Save Word"}
               </button>
 
               <p className="text-center text-xs text-[#9292A2]">
-                Save and continue adding more words
+                {error ? <span role="alert" className="text-red-700">{error}</span> : "Save and continue adding more words"}
               </p>
             </div>
           </form>

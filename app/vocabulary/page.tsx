@@ -1,9 +1,11 @@
 
 "use client";
 
+import { useLibrary } from "../use-library";
+
 import { speakSpanish } from "../speak-spanish";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Search,
   Volume2,
@@ -15,119 +17,27 @@ import {
 } from "lucide-react";
 
 import AddWordSheet from "../components/AddWordSheet";
-import {
-  words,
-  lessons as defaultLessons,
-  type Word,
-} from "@/data/words";
+import EditLibraryDialog from "../components/EditLibraryDialog";
+import LibraryActions from "../components/LibraryActions";
+import type { LibraryEdit } from "../library-data";
 
-const WORDS_STORAGE_KEY = "lingua-custom-words";
-const LESSONS_STORAGE_KEY = "lingua-custom-lessons";
-
-type Lesson = {
-  id: number;
-  title: string;
-  description: string;
-};
 
 export default function VocabularyPage() {
-  const [customWords, setCustomWords] = useState<Word[]>([]);
-  const [customLessons, setCustomLessons] = useState<Lesson[]>([]);
-  const [loaded, setLoaded] = useState(false);
+  const { customWords, customLessons, addWord, editLibrary, libraryError } = useLibrary();
+  const [action, setAction] = useState<{ target: LibraryEdit; deleting: boolean } | null>(null);
 
   const [search, setSearch] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
   const [selectedLesson, setSelectedLesson] = useState<number | null>(null);
 
-  // Load local data
-  useEffect(() => {
-    try {
-      const savedWords = localStorage.getItem(WORDS_STORAGE_KEY);
-      const savedLessons = localStorage.getItem(LESSONS_STORAGE_KEY);
-
-      if (savedWords) {
-        const parsed: unknown = JSON.parse(savedWords);
-
-        if (Array.isArray(parsed)) {
-          const validWords: Word[] = parsed
-            .filter(
-              (item): item is Word =>
-                typeof item === "object" &&
-                item !== null &&
-                typeof item.id === "number" &&
-                typeof item.spanish === "string" &&
-                typeof item.georgian === "string"
-            )
-            .map((item) => ({
-              ...item,
-              lessonId:
-                typeof item.lessonId === "number"
-                  ? item.lessonId
-                  : 1,
-            }));
-
-          setCustomWords(validWords);
-        }
-      }
-
-      if (savedLessons) {
-        const parsed: unknown = JSON.parse(savedLessons);
-
-        if (Array.isArray(parsed)) {
-          const validLessons: Lesson[] = parsed.filter(
-            (item): item is Lesson =>
-              typeof item === "object" &&
-              item !== null &&
-              typeof item.id === "number" &&
-              typeof item.title === "string" &&
-              typeof item.description === "string"
-          );
-
-          setCustomLessons(validLessons);
-        }
-      }
-    } catch (error) {
-      console.error("Could not load saved vocabulary:", error);
-    }
-
-    setLoaded(true);
-  }, []);
-
-  // Save custom words
-  useEffect(() => {
-    if (!loaded) return;
-
-    try {
-      localStorage.setItem(
-        WORDS_STORAGE_KEY,
-        JSON.stringify(customWords)
-      );
-    } catch (error) {
-      console.error("Could not save words:", error);
-    }
-  }, [customWords, loaded]);
-
-  // Save custom lessons
-  useEffect(() => {
-    if (!loaded) return;
-
-    try {
-      localStorage.setItem(
-        LESSONS_STORAGE_KEY,
-        JSON.stringify(customLessons)
-      );
-    } catch (error) {
-      console.error("Could not save lessons:", error);
-    }
-  }, [customLessons, loaded]);
-
   // Combined data
-  const allWords = [...customWords, ...words];
-  const allLessons = [...defaultLessons, ...customLessons];
+  const allWords = customWords;
+  const allLessons = customLessons;
 
   const activeLesson = allLessons.find(
     (lesson) => lesson.id === selectedLesson
   );
+  const activeWordCount = allWords.filter((word) => word.lessonId === selectedLesson).length;
 
   // Filter words
   const filteredWords = allWords.filter((item) => {
@@ -143,38 +53,6 @@ export default function VocabularyPage() {
     return matchesLesson && matchesSearch;
   });
 
-  // Add new word
-  const handleAddWord = (
-    spanish: string,
-    georgian: string,
-    lessonId: number
-  ) => {
-    const newWord: Word = {
-      id: Date.now() + Math.floor(Math.random() * 100000),
-      spanish,
-      georgian,
-      lessonId,
-    };
-
-    setCustomWords((previous) => [newWord, ...previous]);
-  };
-
-  // Create new lesson
-  const handleCreateLesson = (title: string): number => {
-    const newId = Date.now() + Math.floor(Math.random() * 100000);
-
-    const newLesson: Lesson = {
-      id: newId,
-      title,
-      description: "Custom lesson",
-    };
-
-    setCustomLessons((previous) => [...previous, newLesson]);
-
-    return newId;
-  };
-
-  // Pronunciation
   const openLesson = (lessonId: number) => {
     setSelectedLesson(lessonId);
     setSearch("");
@@ -184,6 +62,14 @@ export default function VocabularyPage() {
     setSelectedLesson(null);
     setSearch("");
   };
+
+  function actions(target: LibraryEdit) {
+    return (
+      <LibraryActions label={`${target.kind === "word" ? target.spanish : target.title} actions`}
+        onEdit={() => setAction({ target, deleting: false })}
+        onDelete={() => setAction({ target, deleting: true })} />
+    );
+  }
 
   return (
     <>
@@ -202,13 +88,13 @@ export default function VocabularyPage() {
               </button>
             )}
 
-            <h1 className="text-[26px] font-bold tracking-tight text-[#1B1B29]">
+            <h1 className="break-words text-[26px] font-bold tracking-tight text-[#1B1B29]">
               {activeLesson ? activeLesson.title : "My Words"}
             </h1>
 
             <p className="mt-1 text-[13px] text-[#9292A2]">
               {activeLesson
-                ? activeLesson.description
+                ? `${activeWordCount} ${activeWordCount === 1 ? "word" : "words"}`
                 : `${allWords.length} words · ${allLessons.length} lessons`}
             </p>
           </div>
@@ -223,6 +109,13 @@ export default function VocabularyPage() {
           </button>
         </div>
 
+        {libraryError && <p role="alert" className="mb-4 text-sm text-red-700">{libraryError}</p>}
+        {!libraryError && allLessons.length === 0 && (
+          <p className="rounded-xl border border-[#ECECF2] bg-white p-4 text-sm text-[#777787]">
+            Tap Add to create your first lesson and save a word.
+          </p>
+        )}
+
         {selectedLesson === null ? (
           /* Lessons List */
           <div className="space-y-3">
@@ -232,11 +125,11 @@ export default function VocabularyPage() {
               ).length;
 
               return (
+                <div key={lesson.id} className="flex items-center gap-2 rounded-2xl border border-[#ECECF2] bg-white pr-3">
                 <button
-                  key={lesson.id}
                   type="button"
                   onClick={() => openLesson(lesson.id)}
-                  className="flex w-full items-center gap-4 rounded-2xl border border-[#ECECF2] bg-white p-4 text-left transition hover:border-[#D8CFFF] active:scale-[0.99]"
+                  className="flex min-w-0 flex-1 items-center gap-4 rounded-2xl p-4 text-left transition hover:bg-[#FAF8FF] active:scale-[0.99]"
                 >
                   <div className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-xl bg-[#F5F3FF] text-[#7054E8]">
                     <BookOpen size={23} />
@@ -248,7 +141,7 @@ export default function VocabularyPage() {
                     </h2>
 
                     <p className="mt-1 text-[13px] text-[#9292A2]">
-                      {lesson.description} · {count} სიტყვა
+                      {count} {count === 1 ? "word" : "words"}
                     </p>
                   </div>
 
@@ -257,6 +150,8 @@ export default function VocabularyPage() {
                     className="shrink-0 text-[#A0A0AF]"
                   />
                 </button>
+                {actions({ kind: "lesson", id: lesson.id, title: lesson.title })}
+                </div>
               );
             })}
           </div>
@@ -291,7 +186,7 @@ export default function VocabularyPage() {
             </div>
 
             {/* Words */}
-            <div className="overflow-hidden rounded-2xl border border-[#ECECF2] bg-white">
+            <div className="rounded-2xl border border-[#ECECF2] bg-white">
               {filteredWords.length === 0 ? (
                 <p className="py-12 text-center text-sm text-[#9292A2]">
                   No words found
@@ -320,6 +215,7 @@ export default function VocabularyPage() {
                     >
                       <Volume2 size={19} />
                     </button>
+                    {actions({ kind: "word", id: item.id, spanish: item.spanish, georgian: item.georgian })}
                   </div>
                 ))
               )}
@@ -338,9 +234,12 @@ export default function VocabularyPage() {
         onClose={() => setSheetOpen(false)}
         lessons={allLessons}
         selectedLesson={selectedLesson}
-        onAdd={handleAddWord}
-        onCreateLesson={handleCreateLesson}
+        onAdd={addWord}
       />
+      {action && (
+        <EditLibraryDialog edit={action.target} deleting={action.deleting} onClose={() => setAction(null)}
+          onSave={(target) => editLibrary(target, action.deleting)} />
+      )}
     </>
   );
 }
