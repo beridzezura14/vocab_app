@@ -1,6 +1,8 @@
 
 "use client";
 
+import { speakSpanish } from "../speak-spanish";
+
 import { useEffect, useState } from "react";
 import {
   Search,
@@ -173,21 +175,6 @@ export default function VocabularyPage() {
   };
 
   // Pronunciation
-  const speak = (text: string) => {
-    if (!("speechSynthesis" in window)) return;
-
-    window.speechSynthesis.cancel();
-
-    const utterance = new SpeechSynthesisUtterance(
-      text.split(" / ")[0]
-    );
-
-    utterance.lang = "es-ES";
-    utterance.rate = 0.85;
-
-    window.speechSynthesis.speak(utterance);
-  };
-
   const openLesson = (lessonId: number) => {
     setSelectedLesson(lessonId);
     setSearch("");
@@ -327,7 +314,7 @@ export default function VocabularyPage() {
 
                     <button
                       type="button"
-                      onClick={() => speak(item.spanish)}
+                      onClick={() => speakSpanish(item.spanish)}
                       aria-label={`Pronounce ${item.spanish}`}
                       className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#F5F3FF] text-[#7054E8] active:scale-95"
                     >

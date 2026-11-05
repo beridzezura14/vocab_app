@@ -1,11 +1,16 @@
 
 "use client";
 
+import { speakSpanish } from "../speak-spanish";
+
+import { shuffle } from "../shuffle";
+
 import { useEffect, useState } from "react";
 import {
   ArrowLeft,
   BookOpen,
   Check,
+  ChevronLeft,
   ChevronRight,
   RotateCcw,
   Volume2,
@@ -25,10 +30,20 @@ type Lesson = {
   description: string;
 };
 
+type AnsweredCard = {
+  word: Word;
+  known: boolean;
+  round: number;
+  position: number;
+  total: number;
+};
+
 type StudySession = {
   lesson: Lesson;
   queue: Word[];
   missed: Word[];
+  history: AnsweredCard[];
+  reviewIndex: number;
   index: number;
   knownCount: number;
   round: number;
@@ -107,8 +122,10 @@ export default function FlashcardsPage() {
 
     setSession({
       lesson,
-      queue: lessonWords,
+      queue: shuffle(lessonWords),
       missed: [],
+      history: [],
+      reviewIndex: 0,
       index: 0,
       knownCount: 0,
       round: 1,
@@ -119,7 +136,9 @@ export default function FlashcardsPage() {
 
   const answer = (known: boolean) => {
     setSession((previous) => {
-      if (!previous || previous.completed) return previous;
+      if (!previous || previous.completed || previous.reviewIndex < previous.history.length) {
+        return previous;
+      }
 
       const currentWord = previous.queue[previous.index];
       if (!currentWord) return previous;
@@ -130,58 +149,62 @@ export default function FlashcardsPage() {
 
       const knownCount = previous.knownCount + (known ? 1 : 0);
       const nextIndex = previous.index + 1;
+      const answeredCard: AnsweredCard = {
+        word: currentWord,
+        known,
+        round: previous.round,
+        position: nextIndex,
+        total: previous.queue.length,
+      };
+      const history = [...previous.history, answeredCard];
+      const answered = {
+        ...previous,
+        history,
+        reviewIndex: history.length,
+        knownCount,
+        flipped: false,
+      };
 
       // More cards remain in this round.
       if (nextIndex < previous.queue.length) {
         return {
-          ...previous,
+          ...answered,
           missed,
           index: nextIndex,
-          knownCount,
-          flipped: false,
         };
       }
 
       // All words have been learned.
       if (missed.length === 0) {
         return {
-          ...previous,
+          ...answered,
           missed: [],
-          knownCount,
-          flipped: false,
           completed: true,
         };
       }
 
       // Repeat only missed words.
       return {
-        ...previous,
+        ...answered,
         queue: missed,
         missed: [],
         index: 0,
-        knownCount,
         round: previous.round + 1,
-        flipped: false,
       };
     });
   };
 
-  const speak = (text: string) => {
-    if (!("speechSynthesis" in window)) return;
-
-    window.speechSynthesis.cancel();
-
-    const utterance = new SpeechSynthesisUtterance(
-      text.split(" / ")[0]
-    );
-
-    utterance.lang = "es-ES";
-    utterance.rate = 0.85;
-
-    window.speechSynthesis.speak(utterance);
+  const moveCard = (direction: -1 | 1) => {
+    setSession((previous) => {
+      if (!previous) return previous;
+      const reviewIndex = previous.reviewIndex + direction;
+      if (reviewIndex < 0 || reviewIndex > previous.history.length) return previous;
+      return { ...previous, reviewIndex, flipped: false };
+    });
   };
 
-  const currentWord = session?.queue[session.index];
+  const reviewedCard = session?.history[session.reviewIndex];
+  const currentWord = reviewedCard?.word ?? session?.queue[session.index];
 
   const totalWords = session
     ? allWords.filter((word) => word.lessonId === session.lesson.id).length
@@ -240,7 +263,7 @@ export default function FlashcardsPage() {
             })}
           </div>
         </>
-      ) : session.completed ? (
+      ) : session.completed && !reviewedCard ? (
         <div className="flex min-h-[65dvh] flex-col items-center justify-center text-center">
           <div className="mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-[#F5F3FF] text-[#7054E8]">
             <Trophy size={38} />
@@ -274,6 +297,14 @@ export default function FlashcardsPage() {
               Practice Again
             </button>
           </div>
+          <button
+            type="button"
+            onClick={() => moveCard(-1)}
+            className="mt-4 flex h-11 items-center gap-2 rounded-full bg-[#F5F3FF] px-5 text-sm font-medium text-[#7054E8]"
+          >
+            <ChevronLeft size={18} />
+            Review Cards
+          </button>
         </div>
       ) : currentWord ? (
         <>
@@ -289,7 +320,7 @@ export default function FlashcardsPage() {
             </button>
 
             <span className="shrink-0 rounded-full bg-[#F5F3FF] px-3 py-1.5 text-xs font-semibold text-[#7054E8]">
-              Round {session.round}
+              Round {reviewedCard?.round ?? session.round}
             </span>
           </div>
 
@@ -300,7 +331,7 @@ export default function FlashcardsPage() {
                 {session.knownCount} / {totalWords} learned
               </span>
               <span>
-                {session.index + 1} / {session.queue.length}
+                {reviewedCard?.position ?? session.index + 1} / {reviewedCard?.total ?? session.queue.length}
               </span>
             </div>
 
@@ -368,37 +399,64 @@ export default function FlashcardsPage() {
           </div>
 
           {/* Pronunciation */}
-          <div className="mt-5 flex justify-center">
+          <div className="mt-5 flex justify-center gap-3">
             <button
               type="button"
-              onClick={() => speak(currentWord.spanish)}
+              aria-label="Previous card"
+              onClick={() => moveCard(-1)}
+              disabled={session.reviewIndex === 0}
+              className="flex size-11 items-center justify-center rounded-full bg-[#F5F3FF] text-[#7054E8] disabled:opacity-40"
+            >
+              <ChevronLeft size={20} />
+            </button>
+            <button
+              type="button"
+              onClick={() => speakSpanish(currentWord.spanish)}
               className="flex h-11 items-center gap-2 rounded-full bg-[#F5F3FF] px-5 text-sm font-medium text-[#7054E8]"
             >
               <Volume2 size={18} />
               Listen
             </button>
+            <button
+              type="button"
+              aria-label={session.completed && session.reviewIndex === session.history.length - 1
+                ? "Back to lesson summary"
+                : "Next card"}
+              onClick={() => moveCard(1)}
+              disabled={!reviewedCard}
+              className="flex size-11 items-center justify-center rounded-full bg-[#F5F3FF] text-[#7054E8] disabled:opacity-40"
+            >
+              <ChevronRight size={20} />
+            </button>
           </div>
 
           {/* Answer buttons */}
-          <div className="mx-auto mt-8 grid w-full max-w-md grid-cols-2 gap-3">
-            <button
-              type="button"
-              onClick={() => answer(false)}
-              className="flex h-14 items-center justify-center gap-2 rounded-2xl border border-[#F5D9DE] bg-[#FFF3F4] text-sm font-semibold text-[#D55A70] active:scale-[0.98]"
-            >
-              <X size={20} />
-              Don't Know
-            </button>
+          {reviewedCard ? (
+            <p className="mx-auto mt-8 flex h-14 items-center justify-center gap-2 text-sm font-semibold" role="status">
+              {reviewedCard.known ? <Check size={20} /> : <X size={20} />}
+              {reviewedCard.known ? "Marked: I Know" : "Marked: Don't Know"}
+            </p>
+          ) : (
+            <div className="mx-auto mt-8 grid w-full max-w-md grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => answer(false)}
+                className="flex h-14 items-center justify-center gap-2 rounded-2xl border border-[#F5D9DE] bg-[#FFF3F4] text-sm font-semibold text-[#D55A70] active:scale-[0.98]"
+              >
+                <X size={20} />
+                Don&apos;t Know
+              </button>
 
-            <button
-              type="button"
-              onClick={() => answer(true)}
-              className="flex h-14 items-center justify-center gap-2 rounded-2xl border border-[#CDEBDD] bg-[#EFFBF5] text-sm font-semibold text-[#23986B] active:scale-[0.98]"
-            >
-              <Check size={20} />
-              I Know
-            </button>
-          </div>
+              <button
+                type="button"
+                onClick={() => answer(true)}
+                className="flex h-14 items-center justify-center gap-2 rounded-2xl border border-[#CDEBDD] bg-[#EFFBF5] text-sm font-semibold text-[#23986B] active:scale-[0.98]"
+              >
+                <Check size={20} />
+                I Know
+              </button>
+            </div>
+          )}
 
           <p className="mt-5 text-center text-xs text-[#A0A0AF]">
             Unknown words will repeat until you learn them

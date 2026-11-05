@@ -1,6 +1,10 @@
 
 "use client";
 
+import { speakSpanish } from "./speak-spanish";
+
+import { shuffle } from "./shuffle";
+
 import { useEffect, useState } from "react";
 import {
   ArrowLeft,
@@ -60,17 +64,6 @@ const getLocalDate = () => {
 
   return `${year}-${month}-${day}`;
 };
-
-function shuffle<T>(items: T[]): T[] {
-  const result = [...items];
-
-  for (let i = result.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [result[i], result[j]] = [result[j], result[i]];
-  }
-
-  return result;
-}
 
 function makeQuiz(allWords: Word[]): QuizQuestion[] {
   const uniqueWords = allWords.filter(
@@ -314,21 +307,6 @@ export default function HomePage() {
     return id;
   };
 
-  const speak = (text: string) => {
-    if (!("speechSynthesis" in window)) return;
-
-    window.speechSynthesis.cancel();
-
-    const utterance = new SpeechSynthesisUtterance(
-      text.split(" / ")[0]
-    );
-
-    utterance.lang = "es-ES";
-    utterance.rate = 0.85;
-
-    window.speechSynthesis.speak(utterance);
-  };
-
   const startQuiz = () => {
     const questions = makeQuiz(allWords);
 
@@ -429,7 +407,7 @@ export default function HomePage() {
                   <button
                     type="button"
                     onClick={() =>
-                      dailyWord && speak(dailyWord.spanish)
+                      dailyWord && speakSpanish(dailyWord.spanish)
                     }
                     aria-label="Listen to word of the day"
                     className="flex h-11 w-11 items-center justify-center rounded-full bg-white/20 transition active:scale-95"
