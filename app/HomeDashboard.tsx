@@ -3,7 +3,7 @@
 
 import { useLibrary } from "./use-library";
 
-import { speakSpanish } from "./speak-spanish";
+import { useSpeakSpanish } from "./speak-spanish";
 
 import { shuffle } from "./shuffle";
 
@@ -108,9 +108,10 @@ function makeQuiz(allWords: Word[]): QuizQuestion[] {
 }
 
 export default function HomePage() {
+  const speakSpanish = useSpeakSpanish();
   const username = useContext(AccountContext);
   const quizKey = `lingua-quiz-history:${username}`;
-  const { customWords, customLessons, addWord, libraryError } = useLibrary();
+  const { customWords, customLessons, addWords, libraryError } = useLibrary();
   const [quizHistory, setQuizHistory] = useState<QuizResult[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [today, setToday] = useState("");
@@ -320,7 +321,7 @@ export default function HomePage() {
                   <button
                     type="button"
                     onClick={() =>
-                      dailyWord && speakSpanish(dailyWord.spanish)
+                      dailyWord && speakSpanish(dailyWord.spanish, dailyWord.id)
                     }
                     aria-label="Listen to word of the day"
                     className="flex h-11 w-11 items-center justify-center rounded-full bg-white/20 transition active:scale-95"
@@ -538,8 +539,8 @@ export default function HomePage() {
           </div>
         ) : currentQuestion ? (
           /* Quiz Question */
-          <>
-            <div className="mb-7 flex items-center justify-between">
+          <section className="flex min-h-[calc(100dvh-12rem-env(safe-area-inset-bottom))] flex-col justify-center">
+            <div className="mb-3 flex items-center justify-between sm:mb-7">
               <button
                 type="button"
                 onClick={closeQuiz}
@@ -554,7 +555,7 @@ export default function HomePage() {
               </span>
             </div>
 
-            <div className="mb-7 h-2 overflow-hidden rounded-full bg-[#ECEAF8]">
+            <div className="mb-4 h-2 shrink-0 overflow-hidden rounded-full bg-[#ECEAF8] sm:mb-7">
               <div
                 className="h-full rounded-full bg-[#7054E8] transition-all duration-300"
                 style={{
@@ -565,23 +566,23 @@ export default function HomePage() {
               />
             </div>
 
-            <div className="mb-6 flex min-h-[220px] flex-col items-center justify-center rounded-[24px] border border-[#E8E4FF] bg-[#F8F6FF] px-5 text-center">
-              <p className="mb-5 text-xs font-semibold uppercase tracking-[0.12em] text-[#A49BBE]">
+            <div className="mb-3 flex min-h-32 flex-col items-center justify-center rounded-[24px] border border-[#E8E4FF] bg-[#F8F6FF] px-4 py-3 text-center sm:mb-6 sm:min-h-[220px]">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#A49BBE] sm:mb-5">
                 {currentQuestion.direction === "es-ka"
                   ? "Spanish → Georgian"
                   : "Georgian → Spanish"}
               </p>
 
-              <h1 className="break-words text-[clamp(25px,6vw,36px)] font-bold text-[#242435]">
+              <h1 className="max-w-full wrap-anywhere text-[clamp(25px,6vw,36px)] font-bold text-[#242435]">
                 {currentQuestion.question}
               </h1>
 
-              <p className="mt-5 text-xs text-[#9292A2]">
+              <p className="mt-2 text-xs text-[#9292A2] sm:mt-5">
                 Choose the correct translation
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2 sm:gap-3">
               {currentQuestion.options.map((option, index) => {
                 const answered = selectedAnswer !== null;
                 const correct =
@@ -605,17 +606,17 @@ export default function HomePage() {
                     type="button"
                     onClick={() => selectAnswer(index)}
                     disabled={answered}
-                    className={`flex min-h-[86px] min-w-0 items-center justify-center rounded-2xl border p-3 text-center text-[14px] font-semibold transition active:scale-[0.98] ${style}`}
+                    className={`flex min-h-14 min-w-0 items-center justify-center rounded-2xl border px-2 py-2 text-center text-[14px] font-semibold transition active:scale-[0.98] sm:min-h-[86px] sm:p-3 ${style}`}
                   >
-                    <span className="break-words">{option}</span>
+                    <span className="min-w-0 wrap-anywhere">{option}</span>
                   </button>
                 );
               })}
             </div>
 
             {selectedAnswer !== null && (
-              <div className="mt-6">
-                <div className="mb-4 flex items-center justify-center gap-2">
+              <div className="sticky bottom-[calc(64px+env(safe-area-inset-bottom))] z-10 mt-3 rounded-xl bg-[#FAFAFC] py-2 sm:static sm:mt-6 sm:p-0">
+                <div className="mb-2 flex items-center justify-center gap-2 text-center sm:mb-4">
                   {selectedAnswer === currentQuestion.correctIndex ? (
                     <>
                       <Check size={19} className="text-[#23986B]" />
@@ -626,7 +627,7 @@ export default function HomePage() {
                   ) : (
                     <>
                       <X size={19} className="text-[#D55A70]" />
-                      <span className="text-sm font-semibold text-[#D55A70]">
+                      <span className="min-w-0 wrap-anywhere text-sm font-semibold text-[#D55A70]">
                         Correct:{" "}
                         {
                           currentQuestion.options[
@@ -641,7 +642,7 @@ export default function HomePage() {
                 <button
                   type="button"
                   onClick={nextQuestion}
-                  className="flex h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-[#7054E8] text-sm font-semibold text-white"
+                  className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#7054E8] text-sm font-semibold text-white sm:h-[52px]"
                 >
                   {questionIndex === quiz.length - 1
                     ? "See Results"
@@ -650,7 +651,7 @@ export default function HomePage() {
                 </button>
               </div>
             )}
-          </>
+          </section>
         ) : null}
       </div>
 
@@ -672,7 +673,7 @@ export default function HomePage() {
         onClose={() => setSheetOpen(false)}
         lessons={allLessons}
         selectedLesson={null}
-        onAdd={addWord}
+        onAdd={addWords}
       />
     </>
   );

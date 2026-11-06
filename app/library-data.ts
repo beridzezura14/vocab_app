@@ -2,6 +2,8 @@ import type { Word } from "@/data/words";
 
 export type Lesson = { id: number; title: string; description: string };
 export type Library = { words: Word[]; lessons: Lesson[] };
+export type WordPair = Pick<Word, "spanish" | "georgian">;
+export const MAX_WORDS_PER_BATCH = 50;
 export type LibraryEdit =
   | { kind: "word"; id: number; spanish: string; georgian: string }
   | { kind: "lesson"; id: number; title: string };

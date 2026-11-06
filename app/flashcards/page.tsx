@@ -3,7 +3,7 @@
 
 import { useLibrary } from "../use-library";
 
-import { speakSpanish } from "../speak-spanish";
+import { useSpeakSpanish } from "../speak-spanish";
 
 import { shuffle } from "../shuffle";
 
@@ -54,6 +54,7 @@ type StudySession = {
 
 
 export default function FlashcardsPage() {
+  const speakSpanish = useSpeakSpanish();
   const { customWords, customLessons, libraryError } = useLibrary();
   const [session, setSession] = useState<StudySession | null>(null);
 
@@ -364,7 +365,7 @@ export default function FlashcardsPage() {
             </button>
             <button
               type="button"
-              onClick={() => speakSpanish(currentWord.spanish)}
+              onClick={() => speakSpanish(currentWord.spanish, currentWord.id)}
               className="flex h-11 items-center gap-2 rounded-full bg-[#F5F3FF] px-5 text-sm font-medium text-[#7054E8]"
             >
               <Volume2 size={18} />

@@ -6,6 +6,7 @@ import AccountForm from "./components/AccountForm";
 import { PasswordRecoveryGate } from "./components/PasswordRecovery";
 import { AccountProvider } from "./components/AccountContext";
 import { accounts, currentAccount } from "./account";
+import { cloudPronunciationEnabled } from "./pronunciation-audio";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -25,7 +26,8 @@ async function AccountShell({ children }: { children: ReactNode }) {
   const account = await accounts().findOne({ _id: username }, { projection: { name: 1, email: 1 } });
 
   return (
-    <AccountProvider username={username} profile={{ name: account?.name ?? username, email: account?.email }}>
+    <AccountProvider username={username} profile={{ name: account?.name ?? username, email: account?.email }}
+      cloudPronunciation={cloudPronunciationEnabled()}>
       <Header />
       <main className="min-w-0 pb-[calc(80px+env(safe-area-inset-bottom))]">{children}</main>
       <BottomNav />

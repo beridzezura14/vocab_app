@@ -5,6 +5,7 @@ import { useEffect, useEffectEvent, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { X, Plus, ChevronDown } from "lucide-react";
 import { createPortal } from "react-dom";
+import { MAX_WORDS_PER_BATCH, type WordPair } from "../library-data";
 
 type Lesson = {
   id: number;
@@ -18,8 +19,7 @@ type AddWordSheetProps = {
   lessons: Lesson[];
   selectedLesson: number | null;
   onAdd: (
-    spanish: string,
-    georgian: string,
+    words: WordPair[],
     lesson: number | string
   ) => Promise<number>;
 };
@@ -35,6 +35,8 @@ export default function AddWordSheet({
 
   const [spanish, setSpanish] = useState("");
   const [georgian, setGeorgian] = useState("");
+  const [bulk, setBulk] = useState(false);
+  const [list, setList] = useState("");
 
   const [mode, setMode] = useState<"existing" | "new">("existing");
   const [lessonId, setLessonId] = useState<number | null>(null);
@@ -42,7 +44,6 @@ export default function AddWordSheet({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const spanishRef = useRef<HTMLInputElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
 
@@ -100,9 +101,19 @@ export default function AddWordSheet({
     };
   }, [open]);
 
+  const rows = list.split(/\r?\n/).flatMap((line, index) => {
+    if (!line.trim()) return [];
+    const pair = /^(.*?)(?:[—–]|\s+-\s+|\t)(.*)$/.exec(line);
+    return [{ line: index + 1, spanish: pair?.[1].trim() ?? "", georgian: pair?.[2].trim() ?? "" }];
+  });
+  const invalidRow = rows.find(({ spanish, georgian }) =>
+    !spanish || !georgian || spanish.length > 500 || georgian.length > 500
+  );
+  const listError = rows.length > MAX_WORDS_PER_BATCH
+    ? `Paste up to ${MAX_WORDS_PER_BATCH} words at a time.`
+    : invalidRow ? `Check line ${invalidRow.line}. Enter a word and translation separated by a dash.` : "";
   const canSave =
-    !saving && spanish.trim().length > 0 &&
-    georgian.trim().length > 0 &&
+    !saving && (bulk ? rows.length > 0 && !listError : spanish.trim().length > 0 && georgian.trim().length > 0) &&
     (mode === "new"
       ? newLessonTitle.trim().length > 0
       : lessonId !== null);
@@ -117,15 +128,16 @@ export default function AddWordSheet({
     setSaving(true);
     setError("");
     try {
-      const targetLessonId = await onAdd(spanish.trim(), georgian.trim(), lesson);
-      setLessonId(targetLessonId);
-      setMode("existing");
-      setNewLessonTitle("");
+      const words = bulk
+        ? rows.map(({ spanish, georgian }) => ({ spanish, georgian }))
+        : [{ spanish: spanish.trim(), georgian: georgian.trim() }];
+      await onAdd(words, lesson);
+      setList("");
       setSpanish("");
       setGeorgian("");
-      spanishRef.current?.focus();
+      onClose();
     } catch {
-      setError("Could not save this word. Please retry.");
+      setError("Could not save your words. Please retry.");
     } finally {
       setSaving(false);
     }
@@ -184,6 +196,37 @@ export default function AddWordSheet({
             className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-[calc(20px+env(safe-area-inset-bottom))]"
           >
             <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-1 rounded-xl bg-[#F5F5F9] p-1">
+                {[false, true].map((value) => (
+                  <button key={String(value)} type="button" disabled={saving} aria-pressed={bulk === value}
+                    onClick={() => { setBulk(value); setError(""); }}
+                    className={`min-h-11 rounded-lg text-sm font-medium ${bulk === value ? "bg-white text-[#7054E8] shadow-sm" : "text-[#626274]"}`}>
+                    {value ? "Paste a list" : "Single word"}
+                  </button>
+                ))}
+              </div>
+              {bulk ? (
+                <div className="space-y-2">
+                  <label htmlFor="word-list" className="block text-sm font-semibold">Word list</label>
+                  <textarea id="word-list" rows={5} value={list} disabled={saving}
+                    onChange={(event) => { setList(event.target.value); setError(""); }}
+                    placeholder={"Siempre — ყოველთვის\nNunca — არასდროს"}
+                    className="w-full rounded-xl border border-[#E7E7EF] bg-[#FAFAFC] p-3 text-base outline-none focus:border-[#7054E8]" />
+                  <p className="text-xs text-[#626274]">One word and translation per line, separated by a dash.</p>
+                  {listError && <p role="alert" className="text-sm text-red-700">{listError}</p>}
+                  {rows.length > 0 && !listError && (
+                    <ul aria-label="Word preview" className="max-h-40 divide-y divide-[#E7E7EF] overflow-y-auto rounded-xl border border-[#E7E7EF]">
+                      {rows.map((row) => (
+                        <li key={row.line} className="grid grid-cols-2 gap-2 px-3 py-2 text-sm">
+                          <span className="wrap-break-word font-semibold">{row.spanish}</span>
+                          <span className="wrap-break-word text-[#626274]">{row.georgian}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ) : (
+              <>
               <div>
                 <label
                   htmlFor="spanish-word"
@@ -193,13 +236,13 @@ export default function AddWordSheet({
                 </label>
 
                 <input
-                  ref={spanishRef}
                   id="spanish-word"
                   type="text"
                   value={spanish}
                   onChange={(event) => setSpanish(event.target.value)}
                   placeholder="e.g. Hola"
                   autoComplete="off"
+                  maxLength={500}
                   required
                   className="h-[52px] w-full rounded-xl border border-[#E7E7EF] bg-[#FAFAFC] px-4 text-base text-[#242435] outline-none focus:border-[#7054E8]"
                 />
@@ -220,10 +263,13 @@ export default function AddWordSheet({
                   onChange={(event) => setGeorgian(event.target.value)}
                   placeholder="მაგ. გამარჯობა"
                   autoComplete="off"
+                  maxLength={500}
                   required
                   className="h-[52px] w-full rounded-xl border border-[#E7E7EF] bg-[#FAFAFC] px-4 text-base text-[#242435] outline-none focus:border-[#7054E8]"
                 />
               </div>
+              </>
+              )}
 
               <div>
                 <label className="mb-2 block text-sm font-semibold text-[#242435]">
@@ -299,11 +345,11 @@ export default function AddWordSheet({
                 className="flex h-[52px] w-full items-center justify-center gap-2 rounded-xl bg-[#7054E8] text-sm font-semibold text-white transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <Plus size={19} />
-                {saving ? "Saving…" : "Save Word"}
+                {saving ? "Saving…" : bulk ? `Save ${rows.length} ${rows.length === 1 ? "word" : "words"}` : "Save Word"}
               </button>
 
               <p className="text-center text-xs text-[#9292A2]">
-                {error ? <span role="alert" className="text-red-700">{error}</span> : "Save and continue adding more words"}
+                {error && <span role="alert" className="text-red-700">{error}</span>}
               </p>
             </div>
           </form>

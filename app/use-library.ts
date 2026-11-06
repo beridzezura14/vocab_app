@@ -1,9 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { parseLibrary, type Library, type LibraryEdit } from "./library-data";
+import { useContext, useEffect, useRef, useState } from "react";
+import { SuccessNoticeContext } from "./components/AccountContext";
+import { parseLibrary, type Library, type LibraryEdit, type WordPair } from "./library-data";
 
 export function useLibrary() {
+  const showNotice = useContext(SuccessNoticeContext);
   const [library, setLibrary] = useState<Library>({ words: [], lessons: [] });
   const [libraryError, setLibraryError] = useState("");
   const load = useRef<AbortController | null>(null);
@@ -24,11 +26,11 @@ export function useLibrary() {
     return () => controller.abort();
   }, []);
 
-  async function addWord(spanish: string, georgian: string, lesson: number | string) {
-    const key = JSON.stringify([spanish, georgian, lesson]);
+  async function addWords(words: WordPair[], lesson: number | string) {
+    const key = JSON.stringify([words, lesson]);
     if (pending.current?.key !== key) {
       const random = crypto.getRandomValues(new Uint16Array(1))[0];
-      pending.current = { key, id: Date.now() * 1024 + random % 1024 };
+      pending.current = { key, id: Date.now() * 4096 + random % 4000 };
     }
     const { id } = pending.current;
     const lessons = typeof lesson === "string" ? [{ id, title: lesson, description: "" }] : [];
@@ -36,7 +38,7 @@ export function useLibrary() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        words: [{ id, spanish, georgian, lessonId: typeof lesson === "number" ? lesson : id }],
+        words: words.map((word, index) => ({ ...word, id: id + index, lessonId: typeof lesson === "number" ? lesson : id })),
         lessons,
       }),
     });
@@ -46,6 +48,8 @@ export function useLibrary() {
     pending.current = null;
     setLibrary(saved);
     setLibraryError("");
+    const added = words.length === 1 ? "1 word added" : `${words.length} words added`;
+    showNotice(typeof lesson === "string" ? `Lesson created. ${added}.` : `${added}.`);
     return typeof lesson === "number" ? lesson : id;
   }
 
@@ -60,7 +64,8 @@ export function useLibrary() {
     load.current?.abort();
     setLibrary(saved);
     setLibraryError("");
+    if (deleting) showNotice(edit.kind === "lesson" ? "Lesson deleted." : "Word deleted.");
   }
 
-  return { customWords: library.words, customLessons: library.lessons, addWord, editLibrary, libraryError };
+  return { customWords: library.words, customLessons: library.lessons, addWords, editLibrary, libraryError };
 }

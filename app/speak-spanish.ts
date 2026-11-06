@@ -1,30 +1,28 @@
-import { words } from "@/data/words";
+import { useContext } from "react";
+import { CloudPronunciationContext } from "./components/AccountContext";
+import { pronunciationText, recordedPronunciation } from "./pronunciation-text";
 
 const spanishLocale = "es-ES";
-const recordedWords = new Map(
-  words
-    .filter((word) => word.lessonId === 1 && word.id <= 15)
-    .map((word) => [pronunciationText(word.spanish), word.id])
-);
 let activeRecording: HTMLAudioElement | null = null;
 
-function pronunciationText(text: string) {
-  return text.split(" / ")[0];
+export function useSpeakSpanish() {
+  const cloud = useContext(CloudPronunciationContext);
+  return (text: string, wordId: number) => speakSpanish(text, wordId, cloud);
 }
 
-export function speakSpanish(text: string) {
+function speakSpanish(text: string, wordId: number, cloud: boolean) {
   activeRecording?.pause();
   activeRecording = null;
 
   const pronunciation = pronunciationText(text);
-  const recordingId = recordedWords.get(pronunciation);
-  if (recordingId === undefined) {
+  const recordingUrl = recordedPronunciation(text) ?? (cloud ? `/api/library/audio?word=${wordId}` : null);
+  if (!recordingUrl) {
     speakWithBrowser(pronunciation);
     return;
   }
 
   window.speechSynthesis?.cancel();
-  const recording = new Audio(`/audio/lesson-1/${recordingId}.wav`);
+  const recording = new Audio(recordingUrl);
   activeRecording = recording;
   void recording.play().catch(() => {
     if (activeRecording === recording) {

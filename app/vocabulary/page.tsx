@@ -3,7 +3,7 @@
 
 import { useLibrary } from "../use-library";
 
-import { speakSpanish } from "../speak-spanish";
+import { useSpeakSpanish } from "../speak-spanish";
 
 import { useState } from "react";
 import {
@@ -23,7 +23,8 @@ import type { LibraryEdit } from "../library-data";
 
 
 export default function VocabularyPage() {
-  const { customWords, customLessons, addWord, editLibrary, libraryError } = useLibrary();
+  const speakSpanish = useSpeakSpanish();
+  const { customWords, customLessons, addWords, editLibrary, libraryError } = useLibrary();
   const [action, setAction] = useState<{ target: LibraryEdit; deleting: boolean } | null>(null);
 
   const [search, setSearch] = useState("");
@@ -209,7 +210,7 @@ export default function VocabularyPage() {
 
                     <button
                       type="button"
-                      onClick={() => speakSpanish(item.spanish)}
+                      onClick={() => speakSpanish(item.spanish, item.id)}
                       aria-label={`Pronounce ${item.spanish}`}
                       className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#F5F3FF] text-[#7054E8] active:scale-95"
                     >
@@ -234,7 +235,7 @@ export default function VocabularyPage() {
         onClose={() => setSheetOpen(false)}
         lessons={allLessons}
         selectedLesson={selectedLesson}
-        onAdd={addWord}
+        onAdd={addWords}
       />
       {action && (
         <EditLibraryDialog edit={action.target} deleting={action.deleting} onClose={() => setAction(null)}

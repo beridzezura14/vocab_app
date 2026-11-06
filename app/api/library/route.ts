@@ -1,6 +1,7 @@
 import { currentAccount, sameOrigin } from "../../account";
 import { database } from "../../database";
-import { parseLibrary, type Library } from "../../library-data";
+import { MAX_WORDS_PER_BATCH, parseLibrary, type Library } from "../../library-data";
+import { preparePronunciation } from "../../pronunciation-audio";
 
 const libraries = () => database().collection<Library & { _id: string }>("personal_libraries");
 
@@ -22,21 +23,27 @@ export async function POST(request: Request) {
     const username = await currentAccount();
     if (!username) return new Response(null, { status: 401 });
 
-    const { words, lessons } = parseLibrary(await request.json().catch(() => null));
-    if (words.length !== 1 || lessons.length > 1) return new Response(null, { status: 400 });
+    const body = await request.json().catch(() => null);
+    const { words, lessons } = parseLibrary(body);
+    if (!words.length || words.length > MAX_WORDS_PER_BATCH || words.length !== body?.words?.length ||
+        lessons.length > 1 || (body?.lessons !== undefined && (!Array.isArray(body.lessons) || lessons.length !== body.lessons.length))) {
+      return new Response(null, { status: 400 });
+    }
     const [word] = words;
     const [lesson] = lessons;
-    if (!word.spanish.trim() || !word.georgian.trim() ||
-        word.spanish.length > 500 || word.georgian.length > 500 ||
+    if (new Set(words.map(({ id }) => id)).size !== words.length ||
+        words.some((item) => item.lessonId !== word.lessonId || !item.spanish.trim() || !item.georgian.trim() ||
+          item.spanish.length > 500 || item.georgian.length > 500) ||
         (lesson && (lesson.id !== word.lessonId || !lesson.title.trim() || lesson.title.length > 200))) {
       return new Response(null, { status: 400 });
     }
     const library = await libraries().findOneAndUpdate(
       lesson ? { _id: username } : { _id: username, "lessons.id": word.lessonId },
-      { $addToSet: { words: word, lessons: { $each: lessons } } },
+      { $addToSet: { words: { $each: words }, lessons: { $each: lessons } } },
       { upsert: Boolean(lesson), returnDocument: "after" }
     );
     if (!library) return new Response(null, { status: 400 });
+    preparePronunciation(username, words.map(({ spanish }) => spanish));
     return Response.json(parseLibrary(library));
   } catch {
     return new Response(null, { status: 503 });
@@ -67,6 +74,7 @@ export async function PATCH(request: Request) {
         { $set: { "words.$.spanish": spanish, "words.$.georgian": georgian } },
         options
       );
+      if (library) preparePronunciation(username, spanish);
     } else if (edit.kind === "lesson") {
       const title = clean(edit.title);
       if (!title || title.length > 200) return new Response(null, { status: 400 });
