@@ -1,15 +1,13 @@
 import { currentAccount, sameOrigin } from "../../account";
-import { database } from "../../database";
-import { MAX_WORDS_PER_BATCH, parseLibrary, type Library } from "../../library-data";
+import { MAX_WORDS_PER_BATCH, parseLibrary } from "../../library-data";
+import { libraries, readLibrary } from "../../library-store";
 import { preparePronunciation } from "../../pronunciation-audio";
-
-const libraries = () => database().collection<Library & { _id: string }>("personal_libraries");
 
 export async function GET() {
   try {
     const username = await currentAccount();
     if (!username) return new Response(null, { status: 401 });
-    return Response.json(parseLibrary(await libraries().findOne({ _id: username })), {
+    return Response.json(await readLibrary(username), {
       headers: { "Cache-Control": "private, no-store" },
     });
   } catch {

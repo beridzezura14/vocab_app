@@ -1,17 +1,18 @@
 "use client";
 
-import { useContext, useEffect, useRef, useState } from "react";
+import { createContext, createElement, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { SuccessNoticeContext } from "./components/AccountContext";
 import { parseLibrary, type Library, type LibraryEdit, type WordPair } from "./library-data";
 
-export function useLibrary() {
+function useLibraryState(initialLibrary: Library | null) {
   const showNotice = useContext(SuccessNoticeContext);
-  const [library, setLibrary] = useState<Library>({ words: [], lessons: [] });
+  const [library, setLibrary] = useState<Library>(() => initialLibrary ?? { words: [], lessons: [] });
   const [libraryError, setLibraryError] = useState("");
   const load = useRef<AbortController | null>(null);
   const pending = useRef<{ key: string; id: number } | null>(null);
 
   useEffect(() => {
+    if (initialLibrary) return;
     const controller = new AbortController();
     load.current = controller;
     fetch("/api/library", { signal: controller.signal })
@@ -24,7 +25,7 @@ export function useLibrary() {
         if (!controller.signal.aborted) setLibraryError("Could not load your library. Refresh to retry.");
       });
     return () => controller.abort();
-  }, []);
+  }, [initialLibrary]);
 
   async function addWords(words: WordPair[], lesson: number | string) {
     const key = JSON.stringify([words, lesson]);
@@ -68,4 +69,17 @@ export function useLibrary() {
   }
 
   return { customWords: library.words, customLessons: library.lessons, addWords, editLibrary, libraryError };
+}
+
+const LibraryContext = createContext<ReturnType<typeof useLibraryState> | null>(null);
+
+export function LibraryProvider({ initialLibrary, children }: { initialLibrary: Library | null; children: ReactNode }) {
+  const library = useLibraryState(initialLibrary);
+  return createElement(LibraryContext.Provider, { value: library }, children);
+}
+
+export function useLibrary() {
+  const library = useContext(LibraryContext);
+  if (!library) throw new Error("LibraryProvider is missing");
+  return library;
 }

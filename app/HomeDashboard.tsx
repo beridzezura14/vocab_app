@@ -2,8 +2,11 @@
 "use client";
 
 import { useLibrary } from "./use-library";
+import { useResumeState } from "./use-resume-state";
+import WordMatch, { makeMatch, matchCandidates, type MatchSession } from "./components/WordMatch";
 
 import { useSpeakSpanish } from "./speak-spanish";
+import { pronunciationText } from "./pronunciation-text";
 
 import { shuffle } from "./shuffle";
 
@@ -15,7 +18,6 @@ import {
   Brain,
   Check,
   ChevronRight,
-  Flame,
   Layers3,
   Plus,
   RotateCcw,
@@ -47,6 +49,23 @@ type QuizResult = {
   total: number;
 };
 
+type QuizSession = {
+  mode?: "daily" | "listen";
+  quiz: QuizQuestion[];
+  questionIndex: number;
+  selectedAnswer: number | null;
+  score: number;
+  quizFinished: boolean;
+};
+
+const emptyQuiz: QuizSession = {
+  quiz: [],
+  questionIndex: 0,
+  selectedAnswer: null,
+  score: 0,
+  quizFinished: false,
+};
+
 const getLocalDate = () => {
   const date = new Date();
   const year = date.getFullYear();
@@ -56,8 +75,8 @@ const getLocalDate = () => {
   return `${year}-${month}-${day}`;
 };
 
-function makeQuiz(allWords: Word[]): QuizQuestion[] {
-  const uniqueWords = allWords.filter(
+function makeQuiz(allWords: Word[], mode: "daily" | "listen"): QuizQuestion[] {
+  const uniqueWords = mode === "listen" ? matchCandidates(allWords) : allWords.filter(
     (word, index, array) =>
       array.findIndex(
         (item) =>
@@ -74,7 +93,7 @@ function makeQuiz(allWords: Word[]): QuizQuestion[] {
 
   return selected.map((word) => {
     const direction: "es-ka" | "ka-es" =
-      Math.random() < 0.5 ? "es-ka" : "ka-es";
+      mode === "listen" || Math.random() < 0.5 ? "es-ka" : "ka-es";
 
     const answerField =
       direction === "es-ka" ? "georgian" : "spanish";
@@ -107,7 +126,7 @@ function makeQuiz(allWords: Word[]): QuizQuestion[] {
   });
 }
 
-export default function HomePage() {
+export default function HomePage({ practiceOnly = false }: { practiceOnly?: boolean }) {
   const speakSpanish = useSpeakSpanish();
   const username = useContext(AccountContext);
   const quizKey = `lingua-quiz-history:${username}`;
@@ -118,11 +137,10 @@ export default function HomePage() {
 
   const [sheetOpen, setSheetOpen] = useState(false);
 
-  const [quiz, setQuiz] = useState<QuizQuestion[]>([]);
-  const [questionIndex, setQuestionIndex] = useState(0);
-  const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
-  const [score, setScore] = useState(0);
-  const [quizFinished, setQuizFinished] = useState(false);
+  const [quizSession, setQuizSession] = useResumeState<QuizSession>("quiz");
+  const [match, setMatch] = useResumeState<MatchSession>("match");
+  const { quiz, questionIndex, selectedAnswer, score, quizFinished, mode = "daily" } = quizSession ?? emptyQuiz;
+  const listening = mode === "listen";
 
   useEffect(() => {
     setToday(getLocalDate());
@@ -166,6 +184,13 @@ export default function HomePage() {
 
   const allWords = customWords;
   const allLessons = customLessons;
+  const matchingWords = matchCandidates(allWords);
+
+  function startMatch(timed = false) {
+    if (matchingWords.length < 2) return;
+    const session = makeMatch(matchingWords);
+    setMatch(timed ? { ...session, speed: { deadline: Date.now() + 60_000, score: 0 } } : session);
+  }
 
   // Deterministic word of the day.
   const dateSeed = today
@@ -188,65 +213,26 @@ export default function HomePage() {
 
   const dailyGoal = Math.min(10, todayBestScore);
 
-  const activeDays = new Set(
-    quizHistory.map((result) => result.date)
-  );
-
-  const calculateStreak = () => {
-    if (!today) return 0;
-
-    const cursor = new Date(`${today}T12:00:00`);
-
-    if (!activeDays.has(today)) {
-      cursor.setDate(cursor.getDate() - 1);
-    }
-
-    let streak = 0;
-
-    while (true) {
-      const key = [
-        cursor.getFullYear(),
-        String(cursor.getMonth() + 1).padStart(2, "0"),
-        String(cursor.getDate()).padStart(2, "0"),
-      ].join("-");
-
-      if (!activeDays.has(key)) break;
-
-      streak++;
-      cursor.setDate(cursor.getDate() - 1);
-    }
-
-    return streak;
-  };
-
-  const streak = calculateStreak();
-
-  const startQuiz = () => {
-    const questions = makeQuiz(allWords);
+  const startQuiz = (mode: "daily" | "listen") => {
+    const questions = makeQuiz(allWords, mode);
 
     if (questions.length === 0) return;
 
-    setQuiz(questions);
-    setQuestionIndex(0);
-    setSelectedAnswer(null);
-    setScore(0);
-    setQuizFinished(false);
+    setQuizSession({ ...emptyQuiz, mode, quiz: questions });
   };
 
   const currentQuestion = quiz[questionIndex];
 
   const selectAnswer = (index: number) => {
-    if (selectedAnswer !== null) return;
-    setSelectedAnswer(index);
+    if (!quizSession || selectedAnswer !== null) return;
+    setQuizSession({ ...quizSession, selectedAnswer: index });
   };
 
   const nextQuestion = () => {
-    if (!currentQuestion || selectedAnswer === null) return;
+    if (!quizSession || quizFinished || !currentQuestion || selectedAnswer === null) return;
 
     const correct = selectedAnswer === currentQuestion.correctIndex;
     const updatedScore = score + (correct ? 1 : 0);
-
-    setScore(updatedScore);
 
     if (questionIndex + 1 >= quiz.length) {
       const result: QuizResult = {
@@ -256,26 +242,108 @@ export default function HomePage() {
         total: quiz.length,
       };
 
-      setQuizHistory((previous) => [result, ...previous]);
-      setQuizFinished(true);
+      if (!listening) setQuizHistory((previous) => [result, ...previous]);
+      setQuizSession({ ...quizSession, score: updatedScore, quizFinished: true });
     } else {
-      setQuestionIndex((previous) => previous + 1);
-      setSelectedAnswer(null);
+      setQuizSession({ ...quizSession, score: updatedScore, questionIndex: questionIndex + 1, selectedAnswer: null });
     }
   };
 
   const closeQuiz = () => {
-    setQuiz([]);
-    setQuestionIndex(0);
-    setSelectedAnswer(null);
-    setScore(0);
-    setQuizFinished(false);
+    setQuizSession(null);
   };
+
+  const exerciseCards = (
+    <>
+      {/* Daily Quiz */}
+      <div className="mb-5 rounded-[24px] border border-[#ECECF2] bg-white p-5">
+        <div className="mb-4 flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold text-[#242435]">
+              Daily Quiz
+            </h2>
+
+            <p className="mt-1 text-[13px] text-[#9292A2]">
+              10 random words · Mixed languages
+            </p>
+          </div>
+
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#F5F3FF] text-[#7054E8]">
+            <Brain size={24} />
+          </div>
+        </div>
+
+        <div className="mb-5 flex items-center justify-between text-xs">
+          <span className="text-[#9292A2]">
+            Spanish ↔ Georgian
+          </span>
+          <span className="font-semibold text-[#7054E8]">
+            10 questions
+          </span>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => startQuiz("daily")}
+          disabled={allWords.length < 4}
+          className="flex h-[50px] w-full items-center justify-center gap-2 rounded-xl bg-[#7054E8] text-sm font-semibold text-white transition active:scale-[0.99] disabled:opacity-50"
+        >
+          Start Quiz
+          <ArrowRight size={18} />
+        </button>
+      </div>
+
+      <div className="mb-5 rounded-[24px] border border-[#ECECF2] bg-white p-5">
+        <h2 className="text-lg font-bold text-[#242435]">Match Words</h2>
+        <p className="mt-1 text-[13px] text-[#626274]">
+          {matchingWords.length >= 2 ? "Match up to 6 random words with their translations." : "Add at least 2 different word pairs to play."}
+        </p>
+        <button type="button" onClick={() => startMatch()} disabled={matchingWords.length < 2}
+          className="mt-4 flex h-[50px] w-full items-center justify-center gap-2 rounded-xl bg-[#7054E8] text-sm font-semibold text-white disabled:opacity-50">
+          Start Matching <ArrowRight size={18} />
+        </button>
+      </div>
+
+      <div className="mb-5 rounded-[24px] border border-[#ECECF2] bg-white p-5">
+        <h2 className="text-lg font-bold text-[#242435]">Listen &amp; Choose</h2>
+        <p className="mt-1 text-[13px] text-[#626274]">
+          {matchingWords.length >= 4 ? "Listen to a word and choose its translation." : "Add at least 4 different word pairs to play."}
+        </p>
+        <button type="button" onClick={() => startQuiz("listen")} disabled={matchingWords.length < 4}
+          className="mt-4 flex h-[50px] w-full items-center justify-center gap-2 rounded-xl bg-[#7054E8] text-sm font-semibold text-white disabled:opacity-50">
+          Start Listening <Volume2 size={18} />
+        </button>
+      </div>
+
+      <div className="mb-5 rounded-[24px] border border-[#ECECF2] bg-white p-5">
+        <h2 className="text-lg font-bold text-[#242435]">Speed Round</h2>
+        <p className="mt-1 text-[13px] text-[#626274]">
+          {matchingWords.length >= 2 ? "Match as many word pairs as you can in 60 seconds." : "Add at least 2 different word pairs to play."}
+        </p>
+        <button type="button" onClick={() => startMatch(true)} disabled={matchingWords.length < 2}
+          className="mt-4 flex h-[50px] w-full items-center justify-center gap-2 rounded-xl bg-[#7054E8] text-sm font-semibold text-white disabled:opacity-50">
+          Start Speed Round <ArrowRight size={18} />
+        </button>
+      </div>
+    </>
+  );
 
   return (
     <>
       <div className="mx-auto w-full max-w-3xl px-4 py-6 sm:px-6">
-        {quiz.length === 0 ? (
+        {match ? (
+          <WordMatch session={match} onChange={setMatch} onExit={() => setMatch(null)}
+            onRestart={() => startMatch(Boolean(match.speed))}
+            nextBoard={() => makeMatch(matchingWords.length >= 2 ? matchingWords : match.words)} />
+        ) : quiz.length === 0 && practiceOnly ? (
+          <>
+            <header className="mb-6">
+              <h1 className="text-2xl font-bold text-[#242435]">Practice</h1>
+              <p className="mt-1 text-sm text-[#626274]">Choose an exercise to practice your vocabulary.</p>
+            </header>
+            {exerciseCards}
+          </>
+        ) : quiz.length === 0 ? (
           <>
             {/* Welcome */}
             <div className="mb-6">
@@ -333,7 +401,7 @@ export default function HomePage() {
             </div>
 
             {/* Statistics */}
-            <div className="mb-6 grid grid-cols-3 gap-2.5">
+            <div className="mb-6 grid grid-cols-2 gap-2.5">
               {[
                 {
                   icon: BookOpen,
@@ -344,11 +412,6 @@ export default function HomePage() {
                   icon: Layers3,
                   value: allLessons.length,
                   label: "Lessons",
-                },
-                {
-                  icon: Flame,
-                  value: streak,
-                  label: "Day streak",
                 },
               ].map((stat) => {
                 const Icon = stat.icon;
@@ -375,43 +438,7 @@ export default function HomePage() {
               })}
             </div>
 
-            {/* Daily Quiz */}
-            <div className="mb-5 rounded-[24px] border border-[#ECECF2] bg-white p-5">
-              <div className="mb-4 flex items-start justify-between gap-3">
-                <div>
-                  <h2 className="text-lg font-bold text-[#242435]">
-                    Daily Quiz
-                  </h2>
-
-                  <p className="mt-1 text-[13px] text-[#9292A2]">
-                    10 random words · Mixed languages
-                  </p>
-                </div>
-
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-[#F5F3FF] text-[#7054E8]">
-                  <Brain size={24} />
-                </div>
-              </div>
-
-              <div className="mb-5 flex items-center justify-between text-xs">
-                <span className="text-[#9292A2]">
-                  Spanish ↔ Georgian
-                </span>
-                <span className="font-semibold text-[#7054E8]">
-                  10 questions
-                </span>
-              </div>
-
-              <button
-                type="button"
-                onClick={startQuiz}
-                disabled={allWords.length < 4}
-                className="flex h-[50px] w-full items-center justify-center gap-2 rounded-xl bg-[#7054E8] text-sm font-semibold text-white transition active:scale-[0.99] disabled:opacity-50"
-              >
-                Start Quiz
-                <ArrowRight size={18} />
-              </button>
-            </div>
+            {exerciseCards}
 
             {/* Daily Goal */}
             <div className="mb-5 rounded-[24px] border border-[#ECECF2] bg-white p-5">
@@ -496,7 +523,7 @@ export default function HomePage() {
             </div>
 
             <h1 className="text-[27px] font-bold text-[#1B1B29]">
-              Quiz Completed!
+              {listening ? "Listening Complete!" : "Quiz Completed!"}
             </h1>
 
             <p className="mt-2 text-sm text-[#9292A2]">
@@ -529,7 +556,7 @@ export default function HomePage() {
 
               <button
                 type="button"
-                onClick={startQuiz}
+                onClick={() => startQuiz(mode)}
                 className="flex h-12 flex-1 items-center justify-center gap-2 rounded-xl bg-[#7054E8] text-sm font-semibold text-white"
               >
                 <RotateCcw size={17} />
@@ -547,7 +574,7 @@ export default function HomePage() {
                 className="flex items-center gap-2 text-sm font-medium text-[#777787]"
               >
                 <ArrowLeft size={19} />
-                Exit Quiz
+                {listening ? "Exit Listening" : "Exit Quiz"}
               </button>
 
               <span className="rounded-full bg-[#F5F3FF] px-3 py-1.5 text-xs font-semibold text-[#7054E8]">
@@ -568,14 +595,27 @@ export default function HomePage() {
 
             <div className="mb-3 flex min-h-32 flex-col items-center justify-center rounded-[24px] border border-[#E8E4FF] bg-[#F8F6FF] px-4 py-3 text-center sm:mb-6 sm:min-h-[220px]">
               <p className="mb-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#A49BBE] sm:mb-5">
-                {currentQuestion.direction === "es-ka"
+                {listening ? "Listen & Choose" : currentQuestion.direction === "es-ka"
                   ? "Spanish → Georgian"
                   : "Georgian → Spanish"}
               </p>
 
-              <h1 className="max-w-full wrap-anywhere text-[clamp(25px,6vw,36px)] font-bold text-[#242435]">
-                {currentQuestion.question}
-              </h1>
+              {listening ? (
+                <>
+                  <button type="button" onClick={() => speakSpanish(currentQuestion.question, currentQuestion.wordId)}
+                    className="inline-flex h-12 items-center gap-2 rounded-xl bg-[#7054E8] px-5 text-sm font-semibold text-white">
+                    <Volume2 size={20} /> Listen
+                  </button>
+                  <p lang="es" aria-hidden={selectedAnswer === null}
+                    className={`mt-2 max-w-full wrap-anywhere text-xl font-bold text-[#242435] ${selectedAnswer === null ? "invisible" : ""}`}>
+                    {pronunciationText(currentQuestion.question)}
+                  </p>
+                </>
+              ) : (
+                <h1 className="max-w-full wrap-anywhere text-[clamp(25px,6vw,36px)] font-bold text-[#242435]">
+                  {currentQuestion.question}
+                </h1>
+              )}
 
               <p className="mt-2 text-xs text-[#9292A2] sm:mt-5">
                 Choose the correct translation
@@ -614,10 +654,9 @@ export default function HomePage() {
               })}
             </div>
 
-            {selectedAnswer !== null && (
-              <div className="sticky bottom-[calc(64px+env(safe-area-inset-bottom))] z-10 mt-3 rounded-xl bg-[#FAFAFC] py-2 sm:static sm:mt-6 sm:p-0">
-                <div className="mb-2 flex items-center justify-center gap-2 text-center sm:mb-4">
-                  {selectedAnswer === currentQuestion.correctIndex ? (
+            <div className="sticky bottom-[calc(64px+env(safe-area-inset-bottom))] z-10 mt-3 rounded-xl bg-[#FAFAFC] py-2 sm:static sm:mt-6 sm:p-0">
+              <div role="status" className="mb-2 flex h-6 items-center justify-center gap-2 text-center sm:mb-4">
+                {selectedAnswer !== null && (selectedAnswer === currentQuestion.correctIndex ? (
                     <>
                       <Check size={19} className="text-[#23986B]" />
                       <span className="text-sm font-semibold text-[#23986B]">
@@ -626,8 +665,8 @@ export default function HomePage() {
                     </>
                   ) : (
                     <>
-                      <X size={19} className="text-[#D55A70]" />
-                      <span className="min-w-0 wrap-anywhere text-sm font-semibold text-[#D55A70]">
+                      <X size={19} className="shrink-0 text-[#D55A70]" />
+                      <span className="min-w-0 truncate text-sm font-semibold text-[#D55A70]">
                         Correct:{" "}
                         {
                           currentQuestion.options[
@@ -636,27 +675,27 @@ export default function HomePage() {
                         }
                       </span>
                     </>
-                  )}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={nextQuestion}
-                  className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#7054E8] text-sm font-semibold text-white sm:h-[52px]"
-                >
-                  {questionIndex === quiz.length - 1
-                    ? "See Results"
-                    : "Next Question"}
-                  <ArrowRight size={18} />
-                </button>
+                  ))}
               </div>
-            )}
+
+              <button
+                type="button"
+                onClick={nextQuestion}
+                disabled={selectedAnswer === null}
+                className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#7054E8] text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50 sm:h-[52px]"
+              >
+                {questionIndex === quiz.length - 1
+                  ? "See Results"
+                  : "Next Question"}
+                <ArrowRight size={18} />
+              </button>
+            </div>
           </section>
         ) : null}
       </div>
 
       {/* Floating Add Button */}
-      {quiz.length === 0 && (
+      {!practiceOnly && !match && quiz.length === 0 && (
         <button
           type="button"
           onClick={() => setSheetOpen(true)}

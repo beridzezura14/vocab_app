@@ -7,10 +7,12 @@ import { PasswordRecoveryGate } from "./components/PasswordRecovery";
 import { AccountProvider } from "./components/AccountContext";
 import { accounts, currentAccount } from "./account";
 import { cloudPronunciationEnabled } from "./pronunciation-audio";
+import { readLibrary } from "./library-store";
+import { LibraryProvider } from "./use-library";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Lingua",
+  title: "Vocab.App",
   description: "Personal language learning platform",
 };
 
@@ -23,13 +25,20 @@ export const viewport: Viewport = {
 async function AccountShell({ children }: { children: ReactNode }) {
   const username = await currentAccount();
   if (!username) return <AccountForm />;
-  const account = await accounts().findOne({ _id: username }, { projection: { name: 1, email: 1 } });
+  const [account, library] = await Promise.all([
+    accounts().findOne({ _id: username }, { projection: { name: 1, email: 1, speedRoundBest: 1 } }),
+    readLibrary(username).catch(() => null),
+  ]);
 
   return (
-    <AccountProvider username={username} profile={{ name: account?.name ?? username, email: account?.email }}
+    <AccountProvider username={username} profile={{
+      name: account?.name ?? username, email: account?.email, speedRoundBest: account?.speedRoundBest,
+    }}
       cloudPronunciation={cloudPronunciationEnabled()}>
       <Header />
-      <main className="min-w-0 pb-[calc(80px+env(safe-area-inset-bottom))]">{children}</main>
+      <LibraryProvider key={username} initialLibrary={library}>
+        <main className="min-w-0 pb-[calc(80px+env(safe-area-inset-bottom))]">{children}</main>
+      </LibraryProvider>
       <BottomNav />
     </AccountProvider>
   );

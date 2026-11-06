@@ -42,8 +42,8 @@ export async function POST(request: Request) {
             body: JSON.stringify({
               from: PASSWORD_RESET_FROM,
               to: [email],
-              subject: "Reset your Lingua password",
-              text: `Use this one-time link within 20 minutes to reset your Lingua password:\n\n${url}\n\nIf you did not request a reset, you can ignore this email.`,
+              subject: "Reset your Vocab.App password",
+              text: `Use this one-time link within 20 minutes to reset your Vocab.App password:\n\n${url}\n\nIf you did not request a reset, you can ignore this email.`,
             }),
             signal: AbortSignal.timeout(10_000),
           });

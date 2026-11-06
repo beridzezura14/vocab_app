@@ -1,6 +1,5 @@
 import { currentAccount } from "../../../account";
-import { database } from "../../../database";
-import type { Library } from "../../../library-data";
+import { libraries } from "../../../library-store";
 import { pronunciationAudio } from "../../../pronunciation-audio";
 
 export async function GET(request: Request) {
@@ -10,7 +9,7 @@ export async function GET(request: Request) {
     const rawId = new URL(request.url).searchParams.get("word");
     const id = Number(rawId);
     if (!rawId || !Number.isSafeInteger(id) || id <= 0) return new Response(null, { status: 400 });
-    const library = await database().collection<Library & { _id: string }>("personal_libraries")
+    const library = await libraries()
       .findOne({ _id: accountId, "words.id": id }, { projection: { "words.$": 1 } });
     const word = library?.words[0];
     if (!word) return new Response(null, { status: 404 });

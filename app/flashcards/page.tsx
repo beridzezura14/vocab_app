@@ -2,12 +2,12 @@
 "use client";
 
 import { useLibrary } from "../use-library";
+import { useResumeState } from "../use-resume-state";
 
 import { useSpeakSpanish } from "../speak-spanish";
 
 import { shuffle } from "../shuffle";
 
-import { useState } from "react";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -56,7 +56,7 @@ type StudySession = {
 export default function FlashcardsPage() {
   const speakSpanish = useSpeakSpanish();
   const { customWords, customLessons, libraryError } = useLibrary();
-  const [session, setSession] = useState<StudySession | null>(null);
+  const [session, setSession] = useResumeState<StudySession>("learn");
 
   const allWords = customWords;
   const allLessons = customLessons;

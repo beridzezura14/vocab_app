@@ -11,6 +11,7 @@ export const accounts = () => database().collection<{
   _id: string;
   email?: string;
   name?: string;
+  speedRoundBest?: number;
   salt: string;
   passwordHash: string;
   passwordReset?: { hash: string; expiresAt: Date; requestedAt: Date };

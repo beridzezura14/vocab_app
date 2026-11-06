@@ -2,6 +2,7 @@
 "use client";
 
 import { useLibrary } from "../use-library";
+import { useResumeState } from "../use-resume-state";
 
 import { useSpeakSpanish } from "../speak-spanish";
 
@@ -29,15 +30,16 @@ export default function VocabularyPage() {
 
   const [search, setSearch] = useState("");
   const [sheetOpen, setSheetOpen] = useState(false);
-  const [selectedLesson, setSelectedLesson] = useState<number | null>(null);
+  const [savedLesson, setSelectedLesson] = useResumeState<number>("words");
 
   // Combined data
   const allWords = customWords;
   const allLessons = customLessons;
 
   const activeLesson = allLessons.find(
-    (lesson) => lesson.id === selectedLesson
+    (lesson) => lesson.id === savedLesson
   );
+  const selectedLesson = activeLesson?.id ?? null;
   const activeWordCount = allWords.filter((word) => word.lessonId === selectedLesson).length;
 
   // Filter words

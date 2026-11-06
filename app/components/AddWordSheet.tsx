@@ -232,7 +232,7 @@ export default function AddWordSheet({
                   htmlFor="spanish-word"
                   className="mb-2 block text-sm font-semibold text-[#242435]"
                 >
-                  Spanish word
+                  Word
                 </label>
 
                 <input
@@ -253,7 +253,7 @@ export default function AddWordSheet({
                   htmlFor="georgian-word"
                   className="mb-2 block text-sm font-semibold text-[#242435]"
                 >
-                  Georgian translation
+                  Translation
                 </label>
 
                 <input

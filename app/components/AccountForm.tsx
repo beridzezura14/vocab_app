@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { ArrowLeft, ArrowRight, BookOpen, Eye, EyeOff, Languages, Layers3, Volume2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, BookOpen, Eye, EyeOff, Layers3, Volume2 } from "lucide-react";
+import BrandLogo from "./BrandLogo";
 import { PasswordRecovery } from "./PasswordRecovery";
 
 const features = [
@@ -60,12 +61,7 @@ export default function AccountForm() {
     return (
       <main className="min-h-dvh bg-[#F7F6FC] px-4 pb-10 sm:px-8">
         <header className="mx-auto flex max-w-6xl items-center justify-between py-5 sm:py-6">
-          <div className="flex items-center gap-2.5 text-xl font-bold tracking-tight">
-            <span className="grid size-10 place-items-center rounded-xl bg-[#6245D4] text-white">
-              <Languages size={20} />
-            </span>
-            <span>Lingua<span className="text-[#6245D4]">.</span></span>
-          </div>
+          <BrandLogo />
           <button type="button" onClick={() => chooseMode("login")}
             className="rounded-xl border border-[#E5E0F1] bg-white px-4 py-2 text-sm font-semibold text-[#5038B9] transition hover:bg-[#EEE8FF]">
             Sign in
@@ -117,11 +113,9 @@ export default function AccountForm() {
       </button>
       <form key={mode} onSubmit={submit} className="space-y-5 rounded-[26px] border border-white bg-white p-6 shadow-xl shadow-[#5038B9]/10 sm:p-8">
         <div>
-          <span className="mb-4 grid size-11 place-items-center rounded-xl bg-[#F3EEFF] text-[#6245D4]">
-            <Languages size={22} />
-          </span>
+          <div className="mb-4"><BrandLogo iconOnly /></div>
           <h1 className="text-3xl font-bold tracking-tight">
-            {upgrade ? "Switch to email sign-in" : register ? "Create an account" : "Sign in to Lingua"}
+            {upgrade ? "Switch to email sign-in" : register ? "Create an account" : "Sign in to Vocab.App"}
           </h1>
           <p className="mt-2 text-sm leading-6 text-[#626274]">
             {upgrade ? "Use your old username and password to keep your lessons and link an email." :
