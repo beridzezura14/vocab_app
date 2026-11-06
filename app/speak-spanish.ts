@@ -3,7 +3,8 @@ import { CloudPronunciationContext } from "./components/AccountContext";
 import { pronunciationText, recordedPronunciation } from "./pronunciation-text";
 
 const spanishLocale = "es-ES";
-let activeRecording: HTMLAudioElement | null = null;
+let activeRecording: { audio: HTMLAudioElement; url: string; text: string } | null = null;
+let playbackRequest = 0;
 
 export function useSpeakSpanish() {
   const cloud = useContext(CloudPronunciationContext);
@@ -11,21 +12,25 @@ export function useSpeakSpanish() {
 }
 
 function speakSpanish(text: string, wordId: number, cloud: boolean) {
-  activeRecording?.pause();
-  activeRecording = null;
-
+  const request = ++playbackRequest;
+  activeRecording?.audio.pause();
   const pronunciation = pronunciationText(text);
   const recordingUrl = recordedPronunciation(text) ?? (cloud ? `/api/library/audio?word=${wordId}` : null);
   if (!recordingUrl) {
+    activeRecording = null;
     speakWithBrowser(pronunciation);
     return;
   }
 
   window.speechSynthesis?.cancel();
-  const recording = new Audio(recordingUrl);
-  activeRecording = recording;
+  const previous = activeRecording;
+  const recording = previous?.url === recordingUrl && previous.text === pronunciation && previous.audio.readyState >= 2
+    ? previous.audio
+    : new Audio(recordingUrl);
+  if (recording === previous?.audio) recording.currentTime = 0;
+  activeRecording = { audio: recording, url: recordingUrl, text: pronunciation };
   void recording.play().catch(() => {
-    if (activeRecording === recording) {
+    if (request === playbackRequest) {
       activeRecording = null;
       speakWithBrowser(pronunciation);
     }
